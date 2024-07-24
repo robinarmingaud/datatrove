@@ -12,30 +12,30 @@ np.random.seed(42)
 
 class ParetoFilter(BaseFilter):
     """
+    Copy of FastText filter  with a random pareto parameter to include some of add out-of-domain content : Brown, Tom, et al. "Language models are few-shot learners." (2020)
     Only keeps documents that have
-    - AT LEAST ONE of the labels in `keep_labels` with a score above the configured threshold, or
-    - NONE of the labels in `remove_labels` with a score above the configured threshold.
+    - AT LEAST ONE of the labels in `keep_labels` with a score respecting np.random.pareto(pareto_score) > 1 - document_score, or
+    - NONE of the labels in `remove_labels` with a score respecting np.random.pareto(pareto_score) > 1 - document_score.
 
     You can only supply one of these, to avoid conflicts. Use multiple filters if you need to. If you supply
     neither, the block will simply annotate each document with the labels (set `save_labels_in_metadata=True`)
 
     Example:
-        for `keep_labels=[("math", 0.9)]` will only keep samples with a score on __label__math of at least 0.9
-        for `remove_labels=[("math", 0.9)]` will remove samples with a score on __label__math of at least 0.9
-
+        for `keep_labels=[("math", 15)]` will only keep samples with np.random.pareto(15) > 1 - document_score
+        for `remove_labels=[("math", 15)]` will remove samples with np.random.pareto(15) > 1 - document_score
     Info to train your own classifier: https://fasttext.cc/docs/en/supervised-tutorial.html
 
     Args:
         model_url: url to download the model from or local path
         keep_labels: tuple of (label name without "__label__", pareto score) (or list of such tuples)
-        remove_labels: tuple of (label name without "__label__", min score) (or list of such tuples)
+        remove_labels: tuple of (label name without "__label__", pareto score) (or list of such tuples)
         save_labels_in_metadata: whether to save all the label scores in the document metadata
         newline_replacement: str to replace \n with before predicting scores
         filter_mode: predict and filter on DOCUMENT, PARAGRAPH or SENTENCE level
         exclusion_writer:
     """
 
-    name = "🤖 fastText"
+    name = "🤖 Pareto FastText"
     _requires_dependencies = [("fasttext", "fasttext-wheel"), "fasteners"]
 
     def __init__(
@@ -90,7 +90,7 @@ class ParetoFilter(BaseFilter):
                 )
             else:
                 return not self.remove_labels or not any(
-                    unit_scores.get(f"__label__{label}", -9e9) >= min_score for label, min_score in self.remove_labels
+                    1 - unit_scores.get(f"__label__{label}", -9e9) < np.random.pareto(min_score) for label, min_score in self.remove_labels
                 )
 
         units = split_into_parts(doc.text, mode=self.filter_mode)
